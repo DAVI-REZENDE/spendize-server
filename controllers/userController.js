@@ -1,28 +1,41 @@
-import { supabase } from '../config/db.js'
+import bcrypt from 'bcrypt'
+
+import { userModel } from "../models/userModel.js"
 
 async function getAll(req, res) {
-    const { data: users, error } = await supabase.from('users').select("*")
-    if(error) throw error
-    
-    res.status(200).send(users)
-} 
+    try {   
+        const users = await userModel.getAll()
+        return res.status(200).send(users)
+    } catch {
+        return res.status(500).send({message: 'Erro ao ler tabela'})
+    }
+}
 
 async function signup(req, res) {
-    if(!req.body.email) return res.status(400).send({message: 'Informe email'})
-    if(!req.body.fullName) return res.status(400).send({message: 'Informe fullName'})
-    if(!req.body.socialId) return res.status(400).send({message: 'Informe socialId'})
-    if(!req.body.password) return res.status(400).send({message: 'Informe password'})
-    if(!req.body.confirmPassword) return res.status(400).send({message: 'Informe confirmPassword'})
+    const { email, password, fullName, socialId, confirmPassword } = req.body
+
+    if(!email) return res.status(400).send({message: 'Informe email'})
+    if(!fullName) return res.status(400).send({message: 'Informe fullName'})
+    if(!socialId) return res.status(400).send({message: 'Informe socialId'})
+    if(!password) return res.status(400).send({message: 'Informe password'})
+    if(!confirmPassword) return res.status(400).send({message: 'Informe confirmPassword'})
+
+    const userExists = await userModel.getByEmail(email)
+    if(userExists) {
+        return res.status(409).send({message: 'Usuário já existe'})
+    }
+    const salt = bcrypt.genSaltSync(10)
+    const hashedPassword = bcrypt.hashSync(password, salt)
 
     const createdUser = {
-        email: req.body.email,
-        full_name: req.body.fullName,
-        social_id: req.body.socialId,
-        password: req.body.password,
+        email: email,
+        full_name: fullName,
+        social_id: socialId,
+        password: hashedPassword,
     }
+
     try {
-        const { data, error } = await supabase.from('users').insert([createdUser])
-        if(error) throw error
+        await userModel.create(createdUser)
         console.log('Usuário criado com sucesso')
         res.status(201).send(createdUser)
     } catch(error) {
